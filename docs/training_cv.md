@@ -46,8 +46,7 @@ The following diagram shows the processing flow:
 
 ![Pipeline_ds](images/ds_arquitecture.jpg)
 
----
-
+```
 
 Azure Key Vault
 (Credentials)
