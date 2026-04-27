@@ -11,7 +11,7 @@
 4. [Pipeline Parameters](#pipeline-parameters)
 5. [Medallion Layers](#medallion-layers)
 6. [Notebooks](#notebooks)
-   - [image_standarizer](#image_standarizer)
+   - [image_exploring](#image_exploring)
    - [dataset_builder](#dataset_builder)
 ---
 
@@ -45,7 +45,7 @@ Azure Blob Storage
 │   │   ["128","224","256","384","512"]                │   │
 │   │                                                 │   │
 │   │   ┌─────────────────────────────────────────┐   │   │
-│   │   │  ForEachResizing  →  image_standarizer  │   │   │
+│   │   │  ForEachResizing  →  image_exploring    │   │   │
 │   │   └─────────────────────────────────────────┘   │   │
 │   │            │                                    │   │
 │   │            ▼                                    │   │
@@ -93,7 +93,7 @@ Azure Blob Storage
 
 ## Pipeline Parameters
 
-'[Fabric_pipeline](images/fabric_ppl.jpg)
+'[Fabric_pipeline](images/fabric_ppl.jpg)'
 
 This pipeline has the parameter definition:
 
@@ -158,7 +158,7 @@ Files/gold/
 
 ## Notebooks
 
-### image_standarizer
+### image_exploring
 
 **Purpose:** Reads raw images from the Bronze layer and produces resized copies in the Silver layer.
 
