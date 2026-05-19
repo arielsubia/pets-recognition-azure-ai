@@ -1,7 +1,7 @@
-# Training & Development Pipeline — Pet Image Classification
-> **Platform:** Microsoft Fabric | **Storage:** Microsoft Fabric (OneLake) | **Orchestration:** Fabric Data Pipeline | **Model Service:** Azure Custom Vision | **Object Detection:** Azure AI Vision
+# Training Pipeline — Pet Image Classification
+> **Role:** Data Scientist | **Platform:** Microsoft Fabric | **Storage:** Microsoft Fabric (OneLake) | **Orchestration:** Fabric Data Pipeline | **Model Service:** Azure Custom Vision
 
-> ⚠️ **Work in Progress** — The core training pipeline for resized images is functional. The original-size model (`real_size_cv`) and the development inference pipeline are currently under active development.
+> ⚠️ **Work in Progress** — The core training pipeline for resized images is functional. The original-size model (`real_size_cv`) is currently under active development.
 
 ---
 
@@ -14,40 +14,41 @@
 5. [Training Pipelines](#training-pipelines)
    - [training_custom_vision](#training_custom_vision)
    - [real_size_cv](#real_size_cv-under-development)
-6. [Development Pipeline](#development-pipeline-preview)
-   - [object_detection](#object_detectionipynb)
-   - [run_inference](#run_inferenceipynb)
-7. [Security](#security)
-8. [How to Run](#how-to-run)
-9. [Output Structure](#output-structure)
-10. [Metrics](#metrics)
-11. [Upcoming Development](#upcoming-development)
+6. [Security](#security)
+7. [How to Run](#how-to-run)
+8. [Output Structure](#output-structure)
+9. [Metrics](#metrics)
+10. [Upcoming Development](#upcoming-development)
 
 ---
 
 ## Overview
 
-This document covers two related pipelines built on **Microsoft Fabric**:
+This document covers the **Data Scientist scope** of the project. The Data Scientist is responsible for:
 
-**1. Training Pipeline (`pl_ml_training`)**
-Trains Azure Custom Vision classification models and evaluates each against a held-out test set. Designed to answer:
+- Designing and implementing the model training notebooks
+- Creating and managing Azure Custom Vision projects
+- Evaluating model performance across different image resolutions
+- Publishing trained models so they can be consumed by the Developer role
+
+The training pipeline (`pl_ml_training`) trains one **Azure Custom Vision** classification model per image resolution and evaluates each against a held-out test set. It is designed to answer a key research question:
 
 > **Does image resolution affect model performance? Is it worth training on original-size images compared to standardized resolutions?**
 
-**2. Development Pipeline (`Implementation_ppl`) — Preview**
-Processes real-world images uploaded by users. Uses **Azure AI Vision** (pre-trained, no custom training needed) to detect and crop pets from complex scenes, then evaluates the cropped image against all trained classification models simultaneously.
+Two training flows are implemented:
 
-| Pipeline | Input | Status |
-|---|---|---|
-| `pl_ml_training` → `training_custom_vision` | Gold layer resized images | ✅ Functional |
-| `pl_ml_training` → `real_size_cv` | Bronze layer raw images | 🚧 In progress |
-| `Implementation_ppl` | User-uploaded real-world images | 🚧 In progress |
+| Flow | Notebook | Input | Models produced | Status |
+|---|---|---|---|---|
+| Resized models | `training_custom_vision.ipynb` | Gold layer | One model per size: 128, 224, 256, 384, 512 | ✅ Functional |
+| Original size model | `real_size_cv.ipynb` | Bronze layer (raw) | One model at original resolution | 🚧 In progress |
+
+All results converge into a single `model_metrics` Delta table, enabling a unified comparison across all models — consumed downstream by the Developer and Data Analyst roles.
+
+> **Handoff to Developer:** Once models are trained and published in Custom Vision, the Developer role uses them inside the `pl_implementation` pipeline for real-world inference. See `development.md` for details.
 
 ---
 
 ## Architecture
-
-### Training Pipeline
 
 ![Training Architecture](images/ds_arquitecture.jpg)
 
@@ -65,56 +66,42 @@ Azure Key Vault
 │  │                                                          │    │
 │  │   ┌─────────────────────────────────────────────────┐   │    │
 │  │   │  Flow 1 — Resized Models                        │   │    │
+│  │   │                                                 │   │    │
 │  │   │  Gold Images ──▶ training_custom_vision.ipynb   │   │    │
 │  │   │  Parameters: size_array                         │   │    │
 │  │   │  ["128","224","256","384","512"]                 │   │    │
-│  │   │           pet-classifier-{size} ────────────────┼───┼──▶ │
+│  │   │                                                 │   │    │
+│  │   │  ForEach1 (Sequential)                          │   │    │
+│  │   │      @item() → IMAGE_SIZE                       │   │    │
+│  │   │           │                                     │   │    │
+│  │   │           ▼                                     │   │    │
+│  │   │  pet-classifier-{size} ─────────────────────────┼───┼──▶ │
 │  │   └─────────────────────────────────────────────────┘   │    │
 │  │                                                          │    │
 │  │   ┌─────────────────────────────────────────────────┐   │    │
 │  │   │  Flow 2 — Original Size Model (Under Dev.)      │   │    │
+│  │   │                                                 │   │    │
 │  │   │  Shortcut Raw Images ──▶ real_size_cv.ipynb     │   │    │
-│  │   │           pet-classifier-original ──────────────┼───┼──▶ │
+│  │   │           │                                     │   │    │
+│  │   │           ▼                                     │   │    │
+│  │   │  pet-classifier-original ───────────────────────┼───┼──▶ │
 │  │   └─────────────────────────────────────────────────┘   │    │
 │  └──────────────────────────────────────────────────────────┘    │
 │                              ▼                                   │
 │                    model_metrics (Delta Table)                   │
 └──────────────────────────────────────────────────────────────────┘
+          │
           │  API calls (train, publish, predict)
           ▼
    Azure Custom Vision
-   (pet-classifier-128/224/256/384/512/original)
-```
-
-### Development Pipeline *(Preview)*
-
-![Development Architecture](images/development_arquitecture.jpg)
-
-```
-User uploads image
-        │
-        ▼
-Azure Blob Storage ──▶ OneLake Shortcut (development images)
-        │
-        ▼ (blob trigger)
-Implementation_ppl
-        │
-        ├──▶ object_detection.ipynb
-        │         │  Azure AI Vision API (pre-trained)
-        │         │  Detects pet → crops bounding box
-        │         │
-        │         ├── Pet found ──▶ run_inference.ipynb
-        │         │                     ForEach all model sizes
-        │         │                     → inference_metrics (Delta Table)
-        │         │
-        │         └── No pet found ──▶ log_no_detection
-        │                               → inference_metrics (detected=false)
-        │
-        └──▶ object_detection_metrics (Delta Table)
-                  (logs every detection event)
-                        │
-                        ▼
-                   Dashboard (Power BI) ← Data Analyst scope
+   ┌───────────────────────────┐
+   │  pet-classifier-128       │
+   │  pet-classifier-224       │
+   │  pet-classifier-256       │
+   │  pet-classifier-384       │
+   │  pet-classifier-512       │
+   │  pet-classifier-original  │ ← Under development
+   └───────────────────────────┘
 ```
 
 ---
@@ -123,34 +110,25 @@ Implementation_ppl
 
 | Requirement | Details |
 |---|---|
-| Microsoft Fabric Workspace | With at least one attached Lakehouse (`lkh_pets`) |
-| Gold layer populated | Run the ETL Images pipeline first |
-| Bronze layer available | OneLake Shortcut from Azure Blob Storage |
-| Azure Key Vault | Storing all API credentials |
-| Azure Custom Vision | S0 Standard tier (**Free tier limited to 2 projects**) |
-| Azure AI Vision | Computer Vision resource for pre-trained object detection |
-| Fabric Capacity | F2 or higher recommended |
-| Python Libraries | `azure-cognitiveservices-vision-customvision`, `msrest`, `requests`, `Pillow` |
+| Microsoft Fabric Workspace | With `lkh_pets` set as the **default Lakehouse** in each notebook |
+| Gold layer populated | Run the ETL Images pipeline first to generate `Files/gold/dataset_{size}/` |
+| Bronze layer available | OneLake Shortcut from Azure Blob Storage (required for `real_size_cv`) |
+| Azure Key Vault | Storing all Custom Vision API credentials |
+| Azure Custom Vision | Training and Prediction resources (**S0 Standard tier required** — Free tier limited to 2 projects) |
+| Fabric Capacity | F2 or higher recommended to avoid `TooManyRequestsForCapacity` errors |
+| Python Libraries | `azure-cognitiveservices-vision-customvision`, `msrest` (installed via `subprocess` at runtime) |
 
 ---
 
 ## Pipeline Parameters
 
-### pl_ml_training
-
 | Parameter | Type | Default Value | Description |
 |---|---|---|---|
 | `size_array` | Array | `["128","224","256","384","512"]` | Image sizes to train models for |
 
-> ⚠️ Must be **Array** type in the Fabric pipeline canvas — not String.
+> ⚠️ **Important:** The parameter type must be set to **Array** in the Fabric pipeline canvas. Setting it as **String** will prevent the ForEach activity from iterating correctly.
 
-> 💡 To retrain only specific sizes, temporarily set `size_array` to a subset e.g. `["224","256"]`.
-
-### Implementation_ppl
-
-| Parameter | Type | Description |
-|---|---|---|
-| `image_path` | String | Path to the uploaded image, injected by the blob trigger |
+> 💡 **Tip:** To retrain only specific sizes, temporarily set `size_array` to a subset e.g. `["224","256"]`, then restore the full array afterward.
 
 ---
 
@@ -160,6 +138,8 @@ Implementation_ppl
 
 **Status:** ✅ Functional
 
+**Notebook:** `training_custom_vision.ipynb`
+
 **Input:** Gold layer — `Files/gold/dataset_{IMAGE_SIZE}/train` and `.../test`
 
 **Purpose:** Trains one Custom Vision classification model per image resolution and evaluates it against the corresponding test set.
@@ -168,14 +148,14 @@ Implementation_ppl
 
 | Step | Description |
 |---|---|
-| 1 | Resolves absolute `abfss://` paths dynamically from the attached Lakehouse |
-| 2 | Retrieves credentials from Azure Key Vault via `notebookutils.credentials.getSecret()` |
+| 1 | Resolves absolute `abfss://` paths dynamically from the default Lakehouse |
+| 2 | Retrieves all credentials from Azure Key Vault via `notebookutils.credentials.getSecret()` |
 | 3 | Creates or **reuses** an existing Custom Vision project named `pet-classifier-{IMAGE_SIZE}` |
 | 4 | Creates classification tags dynamically from Gold layer label subfolders |
-| 5 | Uploads training images in **batches of 64** |
-| 6 | Validates minimum 5 images per tag before training |
-| 7 | Trains the model with a **30-minute timeout**, polling every 10 seconds |
-| 8 | Unpublishes any existing iteration with the same name, then publishes the new one |
+| 5 | Uploads training images to Custom Vision in **batches of 64** |
+| 6 | Validates minimum 5 images per tag before training (Custom Vision requirement) |
+| 7 | Trains the model with a **30-minute timeout**, polling status every 10 seconds |
+| 8 | Unpublishes any existing published iteration with the same name, then publishes the new one |
 | 9 | Evaluates the model against the test set using the Custom Vision Prediction API |
 | 10 | Saves precision, recall, AP and accuracy to the `model_metrics` Delta table |
 
@@ -183,9 +163,9 @@ Implementation_ppl
 
 | Parameter | Type | Description |
 |---|---|---|
-| `IMAGE_SIZE` | String | Current image size injected by `@item()` |
+| `IMAGE_SIZE` | String | Current image size injected by `@item()` from the ForEach activity |
 
-> ⚠️ Must be **`IMAGE_SIZE`** uppercase in the Notebook activity Base Parameters settings.
+> ⚠️ The base parameter name in the Notebook activity settings must be **`IMAGE_SIZE`** (uppercase) to match the notebook parameter cell variable name exactly.
 
 ---
 
@@ -193,81 +173,54 @@ Implementation_ppl
 
 **Status:** 🚧 In progress
 
+**Notebook:** `real_size_cv.ipynb`
+
 **Input:** Bronze layer — Shortcut Raw Images (original resolution, unmodified)
 
-**Purpose:** Trains a baseline Custom Vision model on raw unresized images to answer:
+**Purpose:** Trains a Custom Vision model on raw unresized images as a **baseline comparison** against the standardized-resolution models. This answers:
 
 > *Does standardizing image resolution improve or hurt model performance compared to training on variable-size originals?*
 
-**Expected output:** One record in `model_metrics` with `image_size = "original"` for direct dashboard comparison.
+**Expected output:** One record in `model_metrics` with `image_size = "original"`, enabling direct comparison with all resized models in the same table and dashboard.
 
----
-
-## Development Pipeline *(Preview)*
-
-### object_detection.ipynb
-
-**Status:** 🚧 In progress
-
-**Purpose:** Detects pets in real-world user-uploaded images using the **Azure AI Vision pre-trained object detection model** — no custom training required. Crops the detected pet bounding box and saves it for classification.
-
-**Key logic:**
-- Calls Azure AI Vision REST API with `features: objects,tags`
-- Uses image-level tags to confirm animal presence — handles breed-specific labels like `"retriever"` by matching parent categories `"dog"` and `"animal"`
-- Crops the highest-confidence bounding box
-- Saves cropped image to `Files/development/cropped/`
-- Logs every transaction to `object_detection_metrics` Delta table
-
-**Why Azure AI Vision instead of Custom Vision Object Detection:**
-Azure AI Vision provides a **pre-trained** model that already detects dogs, cats and animals out of the box — no bounding box tagging or model training is required, saving significant Data Scientist effort.
-
----
-
-### run_inference.ipynb
-
-**Status:** 🚧 In progress
-
-**Purpose:** Takes the cropped pet image and runs it through **all trained classification models** simultaneously via ForEach, saving one result row per model to `inference_metrics`.
+> ⚠️ Note: Custom Vision handles variable image sizes internally, but training time may differ from standardized inputs. This will be evaluated as part of the development.
 
 ---
 
 ## Security
 
-All credentials stored in **Azure Key Vault** — no hardcoded secrets anywhere.
+All credentials are stored in **Azure Key Vault** and retrieved at runtime. No credentials are hardcoded in any notebook.
 
 | Secret Name | Used by | Description |
 |---|---|---|
-| `cv-training-api-key` | `training_custom_vision` | Custom Vision Training API key |
-| `cv-endpoint-t-key` | `training_custom_vision` | Custom Vision Training endpoint |
-| `cv-prediction-api-key` | `training_custom_vision`, `run_inference` | Custom Vision Prediction API key |
-| `cv-endpoint-p-key` | `training_custom_vision`, `run_inference` | Custom Vision Prediction endpoint |
-| `cv-prediction-resource-id` | `training_custom_vision` | Full Azure Resource ID for publishing |
-| `ai-vision-api-key` | `object_detection` | Azure AI Vision API key |
-| `ai-vision-endpoint` | `object_detection` | Azure AI Vision endpoint |
+| `cv-training-api-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Training resource API key |
+| `cv-endpoint-t-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Training resource endpoint URL |
+| `cv-prediction-api-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Prediction resource API key |
+| `cv-endpoint-p-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Prediction resource endpoint URL |
+| `cv-prediction-resource-id` | `training_custom_vision`, `real_size_cv` | Full Azure Resource ID of the Prediction resource (required for publishing iterations) |
 
-> Fabric notebook identity must have **Key Vault Secrets User** role on the Key Vault.
+> The Fabric notebook identity must have **Key Vault Secrets User** role assigned on the Key Vault to retrieve secrets at runtime.
 
 ---
 
 ## How to Run
 
-### Training pipeline
-1. Confirm ETL Images pipeline completed and Gold layer folders exist
-2. Confirm all Key Vault secrets are set
-3. Confirm Azure Custom Vision is on **S0 Standard tier**
-4. Open **`pl_ml_training`** → confirm `size_array` is Array type and Sequential ON
-5. Click **Run**
+### Prerequisites check
+1. Confirm the **ETL Images** pipeline has completed successfully and Gold layer folders exist
+2. Confirm all 5 Key Vault secrets are created and accessible
+3. Confirm Azure Custom Vision resources are on **S0 Standard tier**
+4. Confirm `lkh_pets` is set as the default Lakehouse in `training_custom_vision.ipynb`
 
-### Development pipeline *(Preview)*
-1. Confirm all training models are published in Custom Vision
-2. Confirm Azure AI Vision resource is created and secrets added to Key Vault
-3. Upload a test image to the designated Blob Storage folder
-4. `Implementation_ppl` triggers automatically
-5. Check `inference_metrics` and `object_detection_metrics` tables for results
+### Run the training pipeline
+1. Open the **`pl_ml_training`** pipeline in your Fabric Workspace
+2. Confirm `size_array` parameter is set to **Array** type
+3. Confirm **ForEach1** has **Sequential** mode enabled
+4. Click **Run**
 
-### Re-running
-- Training: notebook reuses existing projects and replaces metrics records automatically
-- Development: each image upload creates new rows in `inference_metrics` — no cleanup needed
+### Re-running the pipeline
+- The notebook automatically **reuses existing projects** — no need to delete Custom Vision projects between runs
+- The notebook automatically **unpublishes previous iterations** before publishing new ones — no manual cleanup needed
+- The `model_metrics` table automatically **replaces the record** for each `image_size` on every run
 
 ---
 
@@ -276,15 +229,8 @@ All credentials stored in **Azure Key Vault** — no hardcoded secrets anywhere.
 ```
 OneLake (lkh_pets Lakehouse)
 │
-├── Files/
-│   └── development/
-│       ├── raw/        ← User uploaded images
-│       └── cropped/    ← Cropped pet bounding boxes
-│
 └── Tables/
-    ├── model_metrics              ← Training evaluation (one record per model size)
-    ├── inference_metrics          ← Real-world inference (one record per image per model)
-    └── object_detection_metrics   ← Detection events log (one record per detected object)
+    └── model_metrics    ← Delta table with one record per model size
 
 Azure Custom Vision Portal (customvision.ai)
     ├── pet-classifier-128
@@ -299,39 +245,20 @@ Azure Custom Vision Portal (customvision.ai)
 
 ## Metrics
 
-### model_metrics
+Training results are stored in the `model_metrics` Delta table in the default Lakehouse.
 
 | Column | Type | Description |
 |---|---|---|
-| `image_size` | String | `"128"`, `"224"`, `"256"`, `"384"`, `"512"`, or `"original"` |
+| `image_size` | String | Resolution used: `"128"`, `"224"`, `"256"`, `"384"`, `"512"`, or `"original"` |
 | `precision` | Float | Model precision on the test set |
 | `recall` | Float | Model recall on the test set |
 | `ap` | Float | Average precision across all tags |
-| `accuracy` | Float | Overall classification accuracy |
-| `timestamp` | Timestamp | Training run completion time |
+| `accuracy` | Float | Overall classification accuracy on the test set |
+| `timestamp` | Timestamp | Date and time the training run completed |
 
-### inference_metrics
+Each pipeline run **replaces** the existing record for a given `image_size`, ensuring the table always reflects the most recent training result per resolution.
 
-| Column | Type | Description |
-|---|---|---|
-| `image_name` | String | Original uploaded filename |
-| `model_size` | String | Model used for this prediction |
-| `detected` | Boolean | Whether a pet was found |
-| `tag` | String | Predicted pet label or `"no_animal"` |
-| `confidence` | Float | Classification confidence score |
-| `timestamp` | Timestamp | Inference run time |
-
-### object_detection_metrics
-
-| Column | Type | Description |
-|---|---|---|
-| `image_name` | String | Original uploaded filename |
-| `detected` | Boolean | Whether any pet was detected |
-| `animal_count` | Integer | Number of animals found |
-| `object_name` | String | Detected object label (e.g. `"retriever"`, `"dog"`) |
-| `confidence` | Float | Detection confidence score |
-| `bbox_x/y/w/h` | Integer | Bounding box coordinates in pixels |
-| `timestamp` | Timestamp | Detection run time |
+> **Downstream consumption:** The `model_metrics` table is consumed by the Developer role in `pl_implementation` for model discovery, and by the Data Analyst role for dashboard visualization. See `development.md` and `dashboard.md` for details.
 
 ---
 
@@ -339,15 +266,13 @@ Azure Custom Vision Portal (customvision.ai)
 
 | Feature | Description | Status |
 |---|---|---|
-| **Original size model** | Train `real_size_cv` on raw images as a baseline | 🚧 In progress |
-| **run_inference notebook** | ForEach inference across all models per uploaded image | 🚧 In progress |
-| **Blob trigger** | Automatic `Implementation_ppl` trigger on image upload | 🔜 Planned |
-| **Dashboard** | Power BI consuming `inference_metrics` and `model_metrics` | 🔜 Planned |
-| **Full dataset training** | Expand to ~75 images per label | 🔜 Planned |
-| **Resource usage tracking** | Log training duration and estimated cost per run | 🔜 Future consideration |
+| **Original size model** | Complete `real_size_cv.ipynb` and train baseline model on raw images | 🚧 In progress |
+| **Full dataset training** | Expand to ~75 images per label per pet category for improved accuracy | 🔜 Planned |
+| **Additional pet categories** | Add more pet labels beyond current dataset | 🔜 Planned |
+| **Resource usage tracking** | Log training duration and estimated cost per model run | 🔜 Future consideration |
 
-> **Note on MLflow:** Azure Custom Vision manages iteration history internally and does not integrate with MLflow. MLflow would apply if the project migrates to a custom PyTorch/TensorFlow model trained directly in Fabric — under evaluation for a future iteration.
+> **Note on MLflow:** Azure Custom Vision manages its own iteration history internally and does not integrate with MLflow. MLflow tracking would apply if the project migrates to a custom model trained directly in Fabric using PyTorch or TensorFlow — under evaluation for a future iteration.
 
 ---
 
-*Built with ❤️ on Microsoft Fabric — OneLake, Spark, Data Pipelines, Azure Custom Vision, and Azure AI Vision.*
+*Built with ❤️ on Microsoft Fabric — OneLake, Spark, Data Pipelines, and Azure Custom Vision.*

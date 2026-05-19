@@ -102,7 +102,7 @@ Files/development/raw/         ← input images
 
 | Requirement | Details |
 |---|---|
-| Microsoft Fabric Workspace | With `lkh_pets` Lakehouse attached |
+| Microsoft Fabric Workspace | With `lkh_pets` With lkh_pets set as the default Lakehouse in each notebook |
 | `pl_ml_training` completed | All `pet-classifier-{size}` projects must be trained and published in Custom Vision |
 | Azure AI Vision resource | Computer Vision resource (any tier) for pre-trained object detection |
 | Azure Custom Vision resources | S0 Standard tier — Training + Prediction resources |
@@ -149,19 +149,6 @@ In the `run_inference_ntb` Notebook activity Base Parameters (inside ForEachCrop
 
 **Purpose:** Detects pets in a real-world image, filters non-animal objects, deduplicates overlapping detections, crops each pet individually and saves results.
 
-#### Cell order
-
-| # | Cell | Description |
-|---|---|---|
-| 1 | Imports | `requests`, `PIL`, `os`, `json`, `datetime` |
-| 2 | Parameters *(tagged)* | `image_path` — injected by pipeline |
-| 3 | Credentials | Retrieves `ai-vision-api-key` and `ai-vision-endpoint` from Key Vault |
-| 4 | Image copy | Copies image from Lakehouse to `/tmp/input.jpg` via `notebookutils.fs.cp()` |
-| 5 | API call | Calls Azure AI Vision REST API with `features: objects,tags` |
-| 6 | Filter + Crop | Filters pet objects, deduplicates via IoU, crops and saves each pet |
-| 7 | Save metrics | Writes rows to `object_detection_metrics` Delta table |
-| 8 | Exit | `notebookutils.notebook.exit(json.dumps(cropped_paths))` |
-
 #### Key design decisions
 
 **Why Azure AI Vision instead of Custom Vision Object Detection:**
@@ -202,31 +189,10 @@ is_pet = bool(obj_tags & PET_TAGS) or (
 
 **Purpose:** Takes a single cropped pet image and evaluates it against all trained Custom Vision classification models dynamically, saving one result row per model.
 
-#### Cell order
-
-| # | Cell | Description |
-|---|---|---|
-| 1 | Install packages | `subprocess` install of `azure-cognitiveservices-vision-customvision` and `msrest` |
-| 2 | Imports | CV prediction and training clients, Spark, datetime |
-| 3 | Parameters *(tagged)* | `cropped_path` — injected by `@item()` from ForEachCrop |
-| 4 | Credentials | Retrieves prediction and training secrets from Key Vault |
-| 5 | Absolute path | Resolves `abfss://` path, copies image to `/tmp/` |
-| 6 | Discover models | `trainer.get_projects()` — dynamically finds all `pet-classifier-*` projects |
-| 7 | Run inference | Iterates over all discovered models, classifies image, collects results |
-| 8 | Save metrics | Writes rows to `inference_metrics` Delta table |
-
 #### Why training credentials are included
 
 Training credentials are used **read-only** exclusively for `trainer.get_projects()` — to dynamically discover all available `pet-classifier-{size}` projects at runtime. This avoids hardcoding model sizes and ensures `run_inference` automatically picks up new models added by future `pl_ml_training` runs without any code changes.
 
-```python
-# READ-ONLY — discovers all trained models dynamically
-all_projects = {
-    p.name: p for p in trainer.get_projects()
-    if p.name.startswith("pet-classifier-")
-}
-# Output: {'pet-classifier-128': ..., 'pet-classifier-224': ..., ...}
-```
 
 ---
 
