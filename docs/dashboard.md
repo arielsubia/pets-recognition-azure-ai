@@ -70,9 +70,10 @@ lkh_pets Lakehouse (SQL Analytics Endpoint)
 |---|---|
 | Microsoft Fabric Workspace | `petsproject` with `lkh_pets` Lakehouse |
 | Pipeline executed | `pl_implementation` run at least once with both providers |
-| Power BI Desktop | Latest version (June 2024+) |
-| Workspace access | Contributor role to publish |
-| Custom visuals | **Image Grid** from AppSource |
+| Workspace access | Contributor role to create reports |
+| Custom visuals | **Image Grid** from AppSource (org visuals or upload `.pbiviz`) |
+
+> **Note:** This report is built entirely from Power BI embedded in Fabric (web). No Power BI Desktop installation required.
 
 ---
 
@@ -365,31 +366,32 @@ RETURN
 
 ## Step-by-Step Build Guide
 
-### Step 1 — Connect to the Lakehouse SQL endpoint
+> All steps are performed in **Power BI embedded within Fabric** (web browser). No Desktop installation needed.
 
-1. Open **Power BI Desktop**
-2. **Get Data → Microsoft Fabric → Lakehouses** (or SQL Server)
-3. Sign in with `dev_ariel@arielsubiahotmail.onmicrosoft.com`
-4. Select workspace `petsproject` → `lkh_pets`
-5. In Navigator, select all three tables:
+### Step 1 — Create the report from the Lakehouse
+
+1. Go to the `petsproject` Fabric workspace
+2. Open `lkh_pets` Lakehouse
+3. Click **SQL analytics endpoint** (top-right toggle)
+4. Select the three tables in the Explorer pane:
    - `object_detection_metrics`
    - `inference_metrics`
    - `model_metrics`
-6. Click **Load** (or Transform Data if you want to preview)
+5. Click **New report** (top toolbar) — this opens the Power BI web editor with those tables pre-loaded
+6. Alternatively: from the workspace, click **+ New → Report → Pick a published dataset** → select `sem_pet_inference` (if already published)
 
 ---
 
 ### Step 2 — Configure the data model
 
-In **Model view**:
+In the **Model view** (left sidebar icon in the web editor):
 
 1. Create relationship:
    - `object_detection_metrics[image_name]` ↔ `inference_metrics[image_name]`
    - Cardinality: Many to Many
    - Cross-filter: Both
 2. No relationship for `model_metrics` (standalone table)
-3. Set `provider` columns to **Data category: None** (used as slicer, not geo)
-4. Set URL columns to **Data category: Image URL**:
+3. Set URL columns to **Data category: Image URL** (column properties panel):
    - `object_detection_metrics[original_image_url]`
    - `object_detection_metrics[cropped_image_url]`
    - `inference_metrics[cropped_image_url]`
@@ -398,7 +400,7 @@ In **Model view**:
 
 ### Step 3 — Create DAX measures
 
-In **Modeling → New measure**, create all measures from the [DAX Measures](#dax-measures) section above.
+In the web editor, go to **Modeling → New measure** (or right-click a table → New measure). Create all measures from the [DAX Measures](#dax-measures) section above.
 
 ---
 
@@ -453,12 +455,12 @@ In **Modeling → New measure**, create all measures from the [DAX Measures](#da
 
 ### Step 8 — Apply report-level formatting
 
-1. **Theme:** Create a custom theme JSON or use a neutral theme
+1. **Theme:** Upload `pet-recognition-theme.json` via **View → Themes → Browse for themes** (upload the JSON file)
    - Provider colors: Azure `#0078D4`, AWS `#FF9900`
    - Background: `#f5f5f7`
    - Text: `#4a4a55`
-2. **Page size:** 16:9 (1280×720)
-3. **Navigation:** Add page navigator buttons at the top of each page
+2. **Page size:** 16:9 (1280×720) — set in Format pane → Canvas settings
+3. **Navigation:** Add page navigator buttons at the top of each page (Insert → Buttons → Navigator)
 4. **Tooltips:** Enable report-level tooltips showing crop image on hover
 
 ---
@@ -494,19 +496,19 @@ Color mapping:
 
 ## How to Publish
 
-### From Power BI Desktop
+The report is created directly in Fabric — no publish step needed. When you save the report from the web editor, it's immediately available in the workspace.
 
-1. **File → Publish → Publish to Power BI**
-2. Select workspace: `petsproject`
-3. The report appears alongside the Lakehouse and pipelines
-4. The semantic model `sem_pet_inference` is created automatically on first publish
+### Steps to save
 
-### From Fabric Portal (web)
+1. Click **File → Save** (or Ctrl+S) in the web report editor
+2. Name the report: `Pet Recognition — Comparative Analysis`
+3. It appears in the workspace alongside the Lakehouse and pipelines
+4. The semantic model `sem_pet_inference` is created automatically on first save
 
-1. Navigate to `petsproject` workspace
-2. Click **+ New → Report → Pick a published semantic model**
-3. Select `sem_pet_inference`
-4. Build using the web editor (limited compared to Desktop)
+### Sharing
+
+- Assign **Viewer** role on the workspace to team members who only need dashboard access
+- Or share the specific report via **Share** button (top-right)
 
 ---
 
@@ -518,12 +520,9 @@ The dashboard is **read-only** — no pipeline knowledge required.
 1. Developer runs `pl_implementation` with a new image path
 2. Both detection notebooks (Azure + AWS) execute in parallel
 3. `object_detection_metrics` and `inference_metrics` tables receive new rows
-4. Data Analyst **refreshes** the report to see updated results
+4. The report uses **DirectQuery** by default — data is always current, no manual refresh needed
 
-**Refresh options:**
-- **DirectQuery** (recommended): Data is always current, no manual refresh needed
-- **Import mode**: Click Refresh in Desktop, or schedule refresh in Fabric
-- **Scheduled refresh**: Configure in Fabric → Semantic model settings → Schedule refresh
+> Since the report lives in Fabric and connects to the Lakehouse SQL endpoint via DirectQuery, new data appears automatically on page load.
 
 ---
 
@@ -532,14 +531,13 @@ The dashboard is **read-only** — no pipeline knowledge required.
 ```
 pets-recognition-azure-ai/
 ├── docs/
-│   └── dashboard.md                    ← this file
+│   └── dashboard.md                    ← this file (design + build guide)
 └── src/
     └── dashboard/
-        ├── pet_inference_dashboard.pbix   ← Power BI report file
-        └── pet-recognition-theme.json     ← custom theme
+        └── pet-recognition-theme.json  ← custom Power BI theme (upload to Fabric)
 ```
 
-> `.pbix` files are binary — commit message should describe what changed visually.
+> The report itself lives in the Fabric workspace (not as a `.pbix` in Git). This doc is the source of truth for the design.
 
 ---
 
