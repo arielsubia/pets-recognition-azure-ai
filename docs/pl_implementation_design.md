@@ -160,6 +160,27 @@ The `pl_implementation` pipeline processes real-world images through **two objec
 | `cropped_image_url` | String | OneLake URL of cropped image |
 | `timestamp` | Timestamp | When inference ran |
 
+### pipeline_errors
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `image_name` | String | Filename that failed validation |
+| `error` | String | Error message (e.g. "Invalid format: .pdf") |
+| `provider` | String | Which notebook rejected it |
+| `timestamp` | Timestamp | When the rejection occurred |
+
+> This table is created dynamically on first write. Both detection notebooks log here when input validation fails (invalid file format). The notebook then exits with an empty array `[]` so the pipeline succeeds without processing.
+
+---
+
+## Input Validation
+
+Both `object_detection` and `object_detection_aws` validate the input file before calling any API:
+
+- **Valid extensions:** `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`
+- **On failure:** logs to `pipeline_errors` table and exits with `[]` (empty array)
+- **Result:** pipeline succeeds, ForEach loops iterate over nothing, no crops produced
+
 ---
 
 ## Notebook Changes Summary

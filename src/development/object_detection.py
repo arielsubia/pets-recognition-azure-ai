@@ -25,19 +25,10 @@
 # # Object Detection — Azure AI Vision
 # This notebook uses Azure AI Vision 4.0 to detect pets in real-world images.
 # It is part of the dual-provider comparison pipeline (`pl_implementation`).
-#
 # **Provider:** `azure_ai_vision`
-#
 # **Known limitation:** Azure AI Vision object detection has a limited taxonomy
 # and does not reliably return bounding boxes for animals in complex scenes.
 # This notebook preserves the heuristic-based approach to document the limitation.
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -57,14 +48,48 @@ PROVIDER = "azure_ai_vision"
 
 # MARKDOWN ********************
 
-# #### Credentials from Key Vault
+# #### Pipeline parameter
+
+# PARAMETERS CELL ********************
+
+image_path = "test-object-detection/elsie_mas_2_people.jpg"
 
 # METADATA ********************
 
 # META {
-# META   "language": "markdown",
+# META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
+# MARKDOWN ********************
+
+# #### Valid extensions
+
+# CELL ********************
+
+VALID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+ext = os.path.splitext(image_path)[1].lower()
+if ext not in VALID_EXTENSIONS:
+    # Log, move to "rejected/", exit
+    error_row = Row(
+        image_name=os.path.basename(image_path),
+        error=f"Invalid format: {ext}",
+        provider=PROVIDER,
+        timestamp=datetime.now()
+    )
+    spark.createDataFrame([error_row]).write.mode("append").saveAsTable("pipeline_errors")
+    notebookutils.notebook.exit(json.dumps([]))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# MARKDOWN ********************
+
+# #### Credentials from Key Vault
 
 # CELL ********************
 
@@ -81,36 +106,7 @@ endpoint = notebookutils.credentials.getSecret(vault_url, "det-obj-endpoint")
 
 # MARKDOWN ********************
 
-# #### Pipeline parameter
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# PARAMETERS CELL ********************
-
-image_path = "test-object-detection/elsie_mas_2_people.jpg"
-
-# METADATA ********************
-
-# META {
-# META   "language": "python",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# MARKDOWN ********************
-
 # #### Copy image from Lakehouse to local temp
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -131,13 +127,6 @@ print(f"Image copied to /tmp/input.jpg from: {image_path}")
 # MARKDOWN ********************
 
 # #### Call Azure AI Vision 4.0 Object Detection API
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -170,13 +159,6 @@ print(f"API response status: {response.status_code}")
 # #### Filter for animal/pet detections
 # Azure AI Vision does not have a dedicated "Pet" category with reliable bounding boxes.
 # We use a heuristic: combine image-level tags with object-level tags to identify pets.
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -237,13 +219,6 @@ print(f"Pet objects after deduplication: {len(detections)}")
 # MARKDOWN ********************
 
 # #### Crop, save, and build metrics
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -313,13 +288,6 @@ print(f"\nTotal crops saved: {len(cropped_paths)}")
 
 # #### Save to object_detection_metrics table
 
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
-
 # CELL ********************
 
 detection_df = spark.createDataFrame(rows)
@@ -337,13 +305,6 @@ print(f"Detection metrics saved: {len(rows)} row(s) | provider: {PROVIDER}")
 # MARKDOWN ********************
 
 # #### Exit with cropped paths for pipeline ForEach
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 

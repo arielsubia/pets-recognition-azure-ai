@@ -1,4 +1,4 @@
-# Fabric notebook source
+﻿# Fabric notebook source
 
 # METADATA ********************
 
@@ -22,22 +22,13 @@
 
 # MARKDOWN ********************
 
-# # Object Detection — AWS Rekognition
+# # Object Detection AWS Rekognition
 # This notebook uses AWS Rekognition `DetectLabels` to detect pets in real-world images.
 # It is part of the dual-provider comparison pipeline (`pl_implementation`).
-#
 # **Provider:** `aws_rekognition`
-#
 # **Advantage:** Rekognition explicitly supports bounding boxes for "Pet" category labels
 # (Cat, Dog) and returns individual instances with coordinates, making it reliable
 # for pet detection in complex scenes with people and backgrounds.
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -60,14 +51,48 @@ PROVIDER = "aws_rekognition"
 
 # MARKDOWN ********************
 
-# #### Credentials from Key Vault
+# #### Pipeline parameter
+
+# PARAMETERS CELL ********************
+
+image_path = "test-object-detection/elsie_mas_2_people.jpg"
 
 # METADATA ********************
 
 # META {
-# META   "language": "markdown",
+# META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
+# MARKDOWN ********************
+
+# #### Valid Extensions
+
+# CELL ********************
+
+VALID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+ext = os.path.splitext(image_path)[1].lower()
+if ext not in VALID_EXTENSIONS:
+    # Log, move to carpeta "rejected/", exit
+    error_row = Row(
+        image_name=os.path.basename(image_path),
+        error=f"Invalid format: {ext}",
+        provider=PROVIDER,
+        timestamp=datetime.now()
+    )
+    spark.createDataFrame([error_row]).write.mode("append").saveAsTable("pipeline_errors")
+    notebookutils.notebook.exit(json.dumps([]))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# MARKDOWN ********************
+
+# #### Credentials from Key Vault
 
 # CELL ********************
 
@@ -95,36 +120,7 @@ print(f"AWS Rekognition client initialized (region: {aws_region})")
 
 # MARKDOWN ********************
 
-# #### Pipeline parameter
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# PARAMETERS CELL ********************
-
-image_path = "test-object-detection/elsie_mas_2_people.jpg"
-
-# METADATA ********************
-
-# META {
-# META   "language": "python",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# MARKDOWN ********************
-
 # #### Copy image from Lakehouse to local temp
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -147,13 +143,6 @@ print(f"Image copied to /tmp/input.jpg from: {image_path}")
 # #### Call AWS Rekognition DetectLabels
 # We send the image bytes directly to Rekognition and filter for labels
 # whose ancestors include "Pet" (this covers Cat, Dog, Kitten, Puppy, etc.)
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -180,13 +169,6 @@ print(f"API response: {len(response['Labels'])} labels detected")
 # #### Filter for pet detections with bounding boxes
 # Rekognition returns a hierarchical taxonomy. We filter labels that have
 # "Pet" or "Animal" as a parent AND have bounding box Instances.
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -225,13 +207,6 @@ for d in detections:
 # MARKDOWN ********************
 
 # #### Crop, save, and build metrics
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
@@ -308,13 +283,6 @@ print(f"\nTotal crops saved: {len(cropped_paths)}")
 
 # #### Save to object_detection_metrics table
 
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
-
 # CELL ********************
 
 detection_df = spark.createDataFrame(rows)
@@ -332,13 +300,6 @@ print(f"Detection metrics saved: {len(rows)} row(s) | provider: {PROVIDER}")
 # MARKDOWN ********************
 
 # #### Exit with cropped paths for pipeline ForEach
-
-# METADATA ********************
-
-# META {
-# META   "language": "markdown",
-# META   "language_group": "synapse_pyspark"
-# META }
 
 # CELL ********************
 
