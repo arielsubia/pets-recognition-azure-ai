@@ -1,6 +1,6 @@
 # pl_implementation — Dual Object Detection Pipeline Design
 
-> **Status:** Implementation in progress
+> **Status:** Functional (trigger + pipeline + metrics)
 > **Last updated:** August 2026
 
 ---
@@ -67,6 +67,22 @@ The `pl_implementation` pipeline processes real-world images through **two objec
               │  Comparative analysis by provider    │
               └──────────────────────────────────────┘
 ```
+
+---
+
+## Trigger (Event-Driven)
+
+The pipeline is triggered automatically when an image is uploaded to Azure Blob Storage.
+
+| Component | Name | Role |
+|-----------|------|------|
+| Eventstream | `es_blob_inference_trigger` | Captures BlobCreated events from storage account |
+| Activator | `rfx_inference_trigger` | Evaluates rule and triggers pipeline |
+| Rule | `rule_inference_on_blob_upload` | Maps event `__subject` to `image_path` parameter |
+
+**Flow:** Blob upload → Event Grid → Eventstream → Activator → `pl_implementation`
+
+The Event Grid subject arrives as `/blobServices/default/containers/images/blobs/inference/foto.jpg`. Both notebooks parse this to the Lakehouse-relative path `images/inference/foto.jpg` via the "Subject parse" cell.
 
 ---
 
@@ -185,26 +201,26 @@ Both `object_detection` and `object_detection_aws` validate the input file befor
 
 ## Notebook Changes Summary
 
-### object_detection.py (rename to keep as Azure path)
+### object_detection.py (Azure path)
 
-- Add `provider = "azure_ai_vision"` column to all metrics rows
-- No logic changes — keep existing Azure AI Vision detection as-is
-- This preserves evidence of Azure's limitation
+- `provider = "azure_ai_vision"` column on all metrics rows
+- Subject parse cell: strips whitespace and extracts Lakehouse-relative path from Event Grid subject
+- Input validation: rejects non-image formats, logs to `pipeline_errors`
+- Preserves heuristic-based detection to document Azure AI Vision's limitations
 
-### object_detection_aws.py (NEW)
+### object_detection_aws.py (AWS path)
 
-- Uses `boto3` to call `rekognition.detect_labels()`
-- Filters for labels with Parent = "Pet" or Name in {"Cat", "Dog"}
-- Takes bounding box `Instances` for each detection
-- Crops each instance and saves to `Files/development/cropped/rekognition/`
-- Writes to same `object_detection_metrics` table with `provider = "aws_rekognition"`
-- Returns JSON list of cropped paths via `notebookutils.notebook.exit()`
+- Uses `boto3` → `rekognition.detect_labels()`
+- Filters labels with Parent = "Pet" or Name in {"Cat", "Dog"}
+- Subject parse cell: same logic as Azure notebook
+- Input validation: same as Azure notebook
+- Crops each instance → `Files/development/cropped/rekognition/`
+- Writes to `object_detection_metrics` with `provider = "aws_rekognition"`
 
-### run_inference.py (refactored)
+### run_inference.py
 
-- New parameter: `provider` (String) — injected by pipeline
+- Parameter: `provider` (String) — injected by pipeline ForEach
 - Adds `provider` column to all `inference_metrics` rows
-- No other logic changes
 
 ---
 
