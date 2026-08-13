@@ -66,6 +66,30 @@ image_path = "test-object-detection/elsie_mas_2_people.jpg"
 
 # MARKDOWN ********************
 
+# #### Subject parse
+
+# CELL ********************
+
+# If comes from trigger (Event Grid format), extract relative path
+image_path = image_path.strip()
+
+if "/blobs/" in image_path:
+    # "/blobServices/default/containers/images/blobs/inference/<new_image>.jpg"
+    # → "images" is the container (= shortcut name), "inference/<new_image>.jpg" is the subpath
+    parts = image_path.split("/blobs/")
+    container = parts[0].split("/containers/")[-1]  # "images"
+    subpath = parts[1]  # "inference/<new_image>.jpg"
+    image_path = f"{container}/{subpath}"  # "images/inference/<new_image>.jpg"
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# MARKDOWN ********************
+
 # #### Valid Extensions
 
 # CELL ********************
