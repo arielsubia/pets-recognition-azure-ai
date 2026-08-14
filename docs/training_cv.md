@@ -44,7 +44,7 @@ Two training flows are implemented:
 
 All results converge into a single `model_metrics` Delta table, enabling a unified comparison across all models — consumed downstream by the Developer and Data Analyst roles.
 
-> **Handoff to Developer:** Once models are trained and published in Custom Vision, the Developer role uses them inside the `pl_implementation` pipeline for real-world inference. See `development.md` for details.
+> **Handoff to Developer:** Once models are trained and published in Custom Vision, the Developer role uses them inside the `pl_implementation` pipeline for real-world inference. See `pl_implementation_design.md` for details.
 
 ---
 
@@ -258,7 +258,7 @@ Training results are stored in the `model_metrics` Delta table in the default La
 
 Each pipeline run **replaces** the existing record for a given `image_size`, ensuring the table always reflects the most recent training result per resolution.
 
-> **Downstream consumption:** The `model_metrics` table is consumed by the Developer role in `pl_implementation` for model discovery, and by the Data Analyst role for dashboard visualization. See `development.md` and `dashboard.md` for details.
+> **Downstream consumption:** The `model_metrics` table is consumed by the Developer role in `pl_implementation` for model discovery, and by the Data Analyst role for dashboard visualization. See `pl_implementation_design.md` and `dashboard.md` for details.
 
 ---
 
@@ -267,12 +267,6 @@ Each pipeline run **replaces** the existing record for a given `image_size`, ens
 | Feature | Description | Status |
 |---|---|---|
 | **Original size model** | Complete `real_size_cv.ipynb` and train baseline model on raw images | 🚧 In progress |
-| **Full dataset training** | Expand to ~75 images per label per pet category for improved accuracy | 🔜 Planned |
-| **Additional pet categories** | Add more pet labels beyond current dataset | 🔜 Planned |
 | **Resource usage tracking** | Log training duration and estimated cost per model run | 🔜 Future consideration |
 
-> **Note on MLflow:** Azure Custom Vision manages its own iteration history internally and does not integrate with MLflow. MLflow tracking would apply if the project migrates to a custom model trained directly in Fabric using PyTorch or TensorFlow — under evaluation for a future iteration.
 
----
-
-*Built with ❤️ on Microsoft Fabric — OneLake, Spark, Data Pipelines, and Azure Custom Vision.*
