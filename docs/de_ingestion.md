@@ -1,5 +1,5 @@
 # Data Engineering Pipeline — Pet Image Classification
-> **Platform:** Microsoft Fabric | **Storage:** Azure Data Lake (OneLake) | **Orchestration:** Fabric Data Pipeline
+> **Platform:** Microsoft Fabric | **Storage:** Lakehouse (OneLake) | **Orchestration:** Fabric Data Pipeline
 
 ---
 
@@ -17,7 +17,7 @@
 
 ## Overview
 
-This section implements an **end-to-end image data engineering pipeline** built natively on **Microsoft Fabric**. It ingests raw pet images from **Azure Blob Storage**, standardizes them into multiple resolutions, splits them into train/test datasets. Then, those datasets are then provided for train classification models using **Azure Custom Vision** — all orchestrated through **Fabric Data Pipelines**.
+This section implements an **end-to-end image data engineering pipeline** built natively on **Microsoft Fabric**. It ingests images from **Azure Blob Storage**, standardizes them into multiple resolutions, splits them into train/test datasets. Then, those datasets are then provided for train classification models using **Azure Custom Vision** — all orchestrated through **Fabric Data Pipelines**.
 
 The pipeline follows the **Medallion Architecture** (Bronze → Silver → Gold), a best practice for organizing data lakes, adapted here for image data processing at scale.
 
@@ -84,7 +84,7 @@ Azure Blob Storage
 | Requirement | Details |
 |---|---|
 | Microsoft Fabric Workspace | With at least one attached Lakehouse (`lkh_pets`) |
-| Azure Blob Storage | Containing raw pet images organized by label folders |
+| Azure Blob Storage | Containing images organized by label folders |
 | Azure Custom Vision | Training and Prediction resources (S0 tier recommended) |
 | Fabric Capacity | F2 or higher recommended to avoid `TooManyRequestsForCapacity` errors |
 | Python Libraries | `azure-cognitiveservices-vision-customvision`, `msrest` |
@@ -110,10 +110,10 @@ This pipeline has the parameter definition:
 ### 🥉 Bronze — Raw Images (Shortcut)
 ```
 Files/images/raw/
-    ├── gato_phil/
+    ├── label_01/
     │   ├── photo_001.jpg
     │   └── ...
-    └── perro_serena/
+    └── label_02/
         ├── photo_001.jpg
         └── ...
 ```
@@ -124,17 +124,16 @@ Files/images/raw/
 ### 🥈 Silver — Resized Images
 ```
 Files/images/resized/
-    ├── gato_phil/
+    ├── label_01/
     │   ├── 128/
     │   ├── 224/
     │   ├── 256/
     │   ├── 384/
     │   └── 512/
-    └── perro_serena/
+    └── label_02/
         └── ...
 ```
 - All images resized to target dimensions while preserving label structure
-- HEIC images converted to JPEG format
 - One subfolder per size per label
 
 ### 🥇 Gold — Train/Test Split
@@ -142,11 +141,11 @@ Files/images/resized/
 Files/gold/
     ├── dataset_128/
     │   ├── train/
-    │   │   ├── gato_phil/
-    │   │   └── perro_serena/
+    │   │   ├── label_01/
+    │   │   └── label_02/
     │   └── test/
-    │       ├── gato_phil/
-    │       └── perro_serena/
+    │       ├── label_01/
+    │       └── label_02/
     ├── dataset_224/
     └── ...
 ```
@@ -192,8 +191,3 @@ Files/gold/
 | Parameter | Description |
 |---|---|
 | `image_size` | Current image size injected by `@item()` |
-
----
-
-
-*Built with ❤️ on Microsoft Fabric — OneLake, Spark, and Data Pipelines.*
