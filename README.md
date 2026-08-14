@@ -116,10 +116,8 @@ pet-recognition-azure-ai/
 │   ├── images/
 │   ├── dashboard.md
 │   ├── de_ingestion.md
-│   ├── development.md
 │   ├── pl_implementation_design.md
-│   ├── training_cv.md
-│   └── roles_and_workflow.md
+│   └── training_cv.md
 │
 └── README.md
 ```
@@ -146,7 +144,7 @@ More details in [`docs/de_ingestion.md`](docs/de_ingestion.md)
 
 ---
 
-## Model Training *(In Progress)*
+## Model Training
 
 The training pipeline trains one **Azure Custom Vision** classification model per image resolution and evaluates each against a held-out test set.
 
@@ -223,10 +221,10 @@ This project simulates a real-world multi-role workflow:
 |---|---|
 | **Data Engineer** | Builds ingestion, resizing and dataset generation pipelines |
 | **Data Scientist** | Creates Azure AI Vision resource, trains and evaluates Custom Vision models |
-| **Developer** | Builds `Implementation_ppl`, object detection and inference notebooks |
+| **Developer** | Builds `pl_implementation`, object detection and inference notebooks |
 | **Data Analyst** | Connects Power BI to Lakehouse, builds inference and metrics dashboard |
 
-More details in [`docs/roles_and_workflow.md`](docs/roles_and_workflow.md)
+More details in each pipeline doc: [`de_ingestion.md`](docs/de_ingestion.md), [`training_cv.md`](docs/training_cv.md), [`pl_implementation_design.md`](docs/pl_implementation_design.md)
 
 ---
 
