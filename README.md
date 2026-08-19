@@ -45,12 +45,11 @@ Azure Blob Storage (Raw Images)
 Microsoft Fabric Workspace
         │
         ├── ETL Images Pipeline
-        │       ├── ForEachResizing  → image_exploring.ipynb   → Silver layer
-        │       └── ForEachGold      → dataset_builder.ipynb   → Gold layer
+        │       ├── ForEachResizing  → image_exploring.py      → Silver layer
+        │       └── ForEachGold      → dataset_builder.py      → Gold layer
         │
         ├── pl_ml_training Pipeline
-        │       ├── training_custom_vision.ipynb  → pet-classifier-{size}
-        │       └── real_size_cv.ipynb            → pet-classifier-original (WIP)
+        │       └── training_custom_vision.py  → pet-classifier-{size} (including original)
         │
         └── pl_implementation Pipeline
                 ├── object_detection.py      → Azure AI Vision (object detection)
@@ -158,7 +157,7 @@ The training pipeline trains one **Azure Custom Vision** classification model pe
 | `pet-classifier-256` | 256×256 resized images | ✅ Functional |
 | `pet-classifier-384` | 384×384 resized images | ✅ Functional |
 | `pet-classifier-512` | 512×512 resized images | ✅ Functional |
-| `pet-classifier-original` | Original resolution | 🚧 In progress |
+| `pet-classifier-original` | Original resolution | � Pending execution |
 
 Results are stored in the `model_metrics` Delta table for dashboard consumption.
 
@@ -250,7 +249,7 @@ More details in each pipeline doc: [`de_ingestion.md`](docs/de_ingestion.md), [`
 
 ## Future Improvements
 
-- Original size model completion (`pet-classifier-original`)
+- Execute original size model training (add `"original"` to `size_array`)
 - Power BI dashboard for inference and provider comparison
 - Web app for real-time inference (separate repo, Azure Static Web Apps + Function)
 - Azure AI Content Safety integration for input moderation

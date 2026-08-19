@@ -1,7 +1,7 @@
 # Training Pipeline — Pet Image Classification
 > **Role:** Data Scientist | **Platform:** Microsoft Fabric | **Storage:** Microsoft Fabric (OneLake) | **Orchestration:** Fabric Data Pipeline | **Model Service:** Azure Custom Vision
 
-> ⚠️ **Work in Progress** — The core training pipeline for resized images is functional. The original-size model (`real_size_cv`) is currently under active development.
+> The training pipeline supports all resolutions including original-size images. Adding `"original"` to the `size_array` parameter triggers training on raw unresized images — no separate notebook needed.
 
 ---
 
@@ -11,9 +11,8 @@
 2. [Architecture](#architecture)
 3. [Prerequisites](#prerequisites)
 4. [Pipeline Parameters](#pipeline-parameters)
-5. [Training Pipelines](#training-pipelines)
+5. [Training Pipeline](#training-pipeline)
    - [training_custom_vision](#training_custom_vision)
-   - [real_size_cv](#real_size_cv-under-development)
 6. [Security](#security)
 7. [How to Run](#how-to-run)
 8. [Output Structure](#output-structure)
@@ -35,12 +34,13 @@ The training pipeline (`pl_ml_training`) trains one **Azure Custom Vision** clas
 
 > **Does image resolution affect model performance? Is it worth training on original-size images compared to standardized resolutions?**
 
-Two training flows are implemented:
+A single unified training flow handles all resolutions:
 
 | Flow | Notebook | Input | Models produced | Status |
 |---|---|---|---|---|
-| Resized models | `training_custom_vision.ipynb` | Gold layer | One model per size: 128, 224, 256, 384, 512 | ✅ Functional |
-| Original size model | `real_size_cv.ipynb` | Bronze layer (raw) | One model at original resolution | 🚧 In progress |
+| All models | `training_custom_vision.py` | Gold layer (`dataset_{size}`) | One model per size: 128, 224, 256, 384, 512, original | ✅ Functional |
+
+The Data Engineer prepares `Files/gold/dataset_original/` via `dataset_builder.py` (reading from the Bronze shortcut), enabling the Data Scientist to train the original-size model without a separate notebook.
 
 All results converge into a single `model_metrics` Delta table, enabling a unified comparison across all models — consumed downstream by the Developer and Data Analyst roles.
 
@@ -64,28 +64,16 @@ Azure Key Vault
 │  ┌──────────────────────────────────────────────────────────┐    │
 │  │   pl_ml_training Pipeline (Fabric Data Pipeline)        │    │
 │  │                                                          │    │
-│  │   ┌─────────────────────────────────────────────────┐   │    │
-│  │   │  Flow 1 — Resized Models                        │   │    │
-│  │   │                                                 │   │    │
-│  │   │  Gold Images ──▶ training_custom_vision.ipynb   │   │    │
-│  │   │  Parameters: size_array                         │   │    │
-│  │   │  ["128","224","256","384","512"]                 │   │    │
-│  │   │                                                 │   │    │
-│  │   │  ForEach1 (Sequential)                          │   │    │
-│  │   │      @item() → IMAGE_SIZE                       │   │    │
-│  │   │           │                                     │   │    │
-│  │   │           ▼                                     │   │    │
-│  │   │  pet-classifier-{size} ─────────────────────────┼───┼──▶ │
-│  │   └─────────────────────────────────────────────────┘   │    │
+│  │   Gold Images ──▶ training_custom_vision.py             │    │
+│  │   Parameters: size_array                                │    │
+│  │   ["128","224","256","384","512","original"]             │    │
 │  │                                                          │    │
-│  │   ┌─────────────────────────────────────────────────┐   │    │
-│  │   │  Flow 2 — Original Size Model (Under Dev.)      │   │    │
-│  │   │                                                 │   │    │
-│  │   │  Shortcut Raw Images ──▶ real_size_cv.ipynb     │   │    │
-│  │   │           │                                     │   │    │
-│  │   │           ▼                                     │   │    │
-│  │   │  pet-classifier-original ───────────────────────┼───┼──▶ │
-│  │   └─────────────────────────────────────────────────┘   │    │
+│  │   ForEach1 (Sequential)                                 │    │
+│  │       @item() → IMAGE_SIZE                              │    │
+│  │            │                                            │    │
+│  │            ▼                                            │    │
+│  │   pet-classifier-{size} ────────────────────────────────┼──▶ │
+│  │                                                          │    │
 │  └──────────────────────────────────────────────────────────┘    │
 │                              ▼                                   │
 │                    model_metrics (Delta Table)                   │
@@ -100,7 +88,7 @@ Azure Key Vault
    │  pet-classifier-256       │
    │  pet-classifier-384       │
    │  pet-classifier-512       │
-   │  pet-classifier-original  │ ← Under development
+   │  pet-classifier-original  │
    └───────────────────────────┘
 ```
 
@@ -111,8 +99,7 @@ Azure Key Vault
 | Requirement | Details |
 |---|---|
 | Microsoft Fabric Workspace | With `lkh_pets` set as the **default Lakehouse** in each notebook |
-| Gold layer populated | Run the ETL Images pipeline first to generate `Files/gold/dataset_{size}/` |
-| Bronze layer available | OneLake Shortcut from Azure Blob Storage (required for `real_size_cv`) |
+| Gold layer populated | Run the ETL Images pipeline first to generate `Files/gold/dataset_{size}/` (includes `dataset_original` when `"original"` is in the array) |
 | Azure Key Vault | Storing all Custom Vision API credentials |
 | Azure Custom Vision | Training and Prediction resources (**S0 Standard tier required** — Free tier limited to 2 projects) |
 | Fabric Capacity | F2 or higher recommended to avoid `TooManyRequestsForCapacity` errors |
@@ -124,7 +111,7 @@ Azure Key Vault
 
 | Parameter | Type | Default Value | Description |
 |---|---|---|---|
-| `size_array` | Array | `["128","224","256","384","512"]` | Image sizes to train models for |
+| `size_array` | Array | `["128","224","256","384","512","original"]` | Image sizes to train models for |
 
 > ⚠️ **Important:** The parameter type must be set to **Array** in the Fabric pipeline canvas. Setting it as **String** will prevent the ForEach activity from iterating correctly.
 
@@ -132,17 +119,17 @@ Azure Key Vault
 
 ---
 
-## Training Pipelines
+## Training Pipeline
 
 ### training_custom_vision
 
 **Status:** ✅ Functional
 
-**Notebook:** `training_custom_vision.ipynb`
+**Notebook:** `training_custom_vision.py`
 
 **Input:** Gold layer — `Files/gold/dataset_{IMAGE_SIZE}/train` and `.../test`
 
-**Purpose:** Trains one Custom Vision classification model per image resolution and evaluates it against the corresponding test set.
+**Purpose:** Trains one Custom Vision classification model per image resolution (including original) and evaluates it against the corresponding test set.
 
 #### Notebook logic per iteration
 
@@ -169,35 +156,17 @@ Azure Key Vault
 
 ---
 
-### real_size_cv *(Under Development)*
-
-**Status:** 🚧 In progress
-
-**Notebook:** `real_size_cv.ipynb`
-
-**Input:** Bronze layer — Shortcut Raw Images (original resolution, unmodified)
-
-**Purpose:** Trains a Custom Vision model on raw unresized images as a **baseline comparison** against the standardized-resolution models. This answers:
-
-> *Does standardizing image resolution improve or hurt model performance compared to training on variable-size originals?*
-
-**Expected output:** One record in `model_metrics` with `image_size = "original"`, enabling direct comparison with all resized models in the same table and dashboard.
-
-> ⚠️ Note: Custom Vision handles variable image sizes internally, but training time may differ from standardized inputs. This will be evaluated as part of the development.
-
----
-
 ## Security
 
 All credentials are stored in **Azure Key Vault** and retrieved at runtime. No credentials are hardcoded in any notebook.
 
 | Secret Name | Used by | Description |
 |---|---|---|
-| `cv-training-api-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Training resource API key |
-| `cv-endpoint-t-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Training resource endpoint URL |
-| `cv-prediction-api-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Prediction resource API key |
-| `cv-endpoint-p-key` | `training_custom_vision`, `real_size_cv` | Custom Vision Prediction resource endpoint URL |
-| `cv-prediction-resource-id` | `training_custom_vision`, `real_size_cv` | Full Azure Resource ID of the Prediction resource (required for publishing iterations) |
+| `cv-training-api-key` | `training_custom_vision` | Custom Vision Training resource API key |
+| `cv-endpoint-t-key` | `training_custom_vision` | Custom Vision Training resource endpoint URL |
+| `cv-prediction-api-key` | `training_custom_vision` | Custom Vision Prediction resource API key |
+| `cv-endpoint-p-key` | `training_custom_vision` | Custom Vision Prediction resource endpoint URL |
+| `cv-prediction-resource-id` | `training_custom_vision` | Full Azure Resource ID of the Prediction resource (required for publishing iterations) |
 
 > The Fabric notebook identity must have **Key Vault Secrets User** role assigned on the Key Vault to retrieve secrets at runtime.
 
@@ -209,7 +178,7 @@ All credentials are stored in **Azure Key Vault** and retrieved at runtime. No c
 1. Confirm the **ETL Images** pipeline has completed successfully and Gold layer folders exist
 2. Confirm all 5 Key Vault secrets are created and accessible
 3. Confirm Azure Custom Vision resources are on **S0 Standard tier**
-4. Confirm `lkh_pets` is set as the default Lakehouse in `training_custom_vision.ipynb`
+4. Confirm `lkh_pets` is set as the default Lakehouse in `training_custom_vision`
 
 ### Run the training pipeline
 1. Open the **`pl_ml_training`** pipeline in your Fabric Workspace
@@ -238,7 +207,7 @@ Azure Custom Vision Portal (customvision.ai)
     ├── pet-classifier-256
     ├── pet-classifier-384
     ├── pet-classifier-512
-    └── pet-classifier-original   ← Under development
+    └── pet-classifier-original
 ```
 
 ---
@@ -266,7 +235,7 @@ Each pipeline run **replaces** the existing record for a given `image_size`, ens
 
 | Feature | Description | Status |
 |---|---|---|
-| **Original size model** | Complete `real_size_cv.ipynb` and train baseline model on raw images | 🚧 In progress |
+| **Original size model execution** | Run pipeline with `"original"` in `size_array` to train baseline model | 🔜 Pending execution (cost-dependent) |
 | **Resource usage tracking** | Log training duration and estimated cost per model run | 🔜 Future consideration |
 
 
