@@ -62,12 +62,16 @@ image_size = ""   # default — overridden by pipeline @item()
 
 # CELL ********************
 
-df = spark.read.format("binaryFile") \
-    .option("recursiveFileLookup", "true") \
-    .load("Files/silver/resized/")
+if image_size == "original":
+    df = spark.read.format("binaryFile") \
+        .option("recursiveFileLookup", "true") \
+        .load("Files/images/raw/")
+else:
+    df = spark.read.format("binaryFile") \
+        .option("recursiveFileLookup", "true") \
+        .load("Files/silver/resized/")
 
 df.show()
-# df.printSchema()
 print("Shape: ", (df.count(), len(df.columns)))
 
 # METADATA ********************
@@ -80,9 +84,10 @@ print("Shape: ", (df.count(), len(df.columns)))
 # CELL ********************
 
 # Filter to only the current size being processed by ForEach
-df = df.filter(
-    regexp_extract("path", r"resized/[^/]+/(\d+)/", 1) == str(image_size)
-)
+if image_size != "original":
+    df = df.filter(
+        regexp_extract("path", r"resized/[^/]+/(\d+)/", 1) == str(image_size)
+    )
 
 print(f"Filtered to size {image_size}: {df.count()} images")
 
@@ -99,13 +104,23 @@ print(f"Filtered to size {image_size}: {df.count()} images")
 
 # CELL ********************
 
-df = df.withColumn(
-    "label",
-    regexp_extract("path", r"resized/([^/]+)/\d+/", 1)  # ← updated regex
-).withColumn(
-    "size",
-    regexp_extract("path", r"resized/[^/]+/(\d+)/", 1)
-)
+if image_size == "original":
+    from pyspark.sql.functions import lit
+    df = df.withColumn(
+        "label",
+        regexp_extract("path", r"raw/([^/]+)/", 1)
+    ).withColumn(
+        "size",
+        lit("original")
+    )
+else:
+    df = df.withColumn(
+        "label",
+        regexp_extract("path", r"resized/([^/]+)/\d+/", 1)
+    ).withColumn(
+        "size",
+        regexp_extract("path", r"resized/[^/]+/(\d+)/", 1)
+    )
 
 df.groupBy("label", "size").count().show()
 
