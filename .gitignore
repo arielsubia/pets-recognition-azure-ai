@@ -20,6 +20,7 @@ pets_env/
 
 # Jupyter Notebook
 .ipynb_checkpoints/
+*.ipynb
 
 # IDE / Editors
 .vscode/
