@@ -50,8 +50,6 @@ All results converge into a single `model_metrics` Delta table, enabling a unifi
 
 ## Architecture
 
-![Training Architecture](images/ds_arquitecture.jpg)
-
 ```
 Azure Key Vault
 (Credentials)
