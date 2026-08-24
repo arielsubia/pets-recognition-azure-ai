@@ -33,7 +33,7 @@ Responsible for data preparation and model training.
 ### Development Workspace
 Responsible for real-world image inference using trained models. Compares **Azure AI Vision** vs **AWS Rekognition** for object detection.
 
-![Development Architecture](docs/images/04_development_pipeline.png)
+![Development Architecture](docs/images/04_development_pipeline.jpg)
 
 The solution follows a layered medallion architecture:
 
