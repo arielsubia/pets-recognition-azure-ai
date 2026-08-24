@@ -28,8 +28,12 @@ The solution is organized into two workspaces with clearly separated roles:
 ### Training Workspace
 Responsible for data preparation and model training.
 
+![Training Architecture](docs/images/03_ml_training_pipeline.png)
+
 ### Development Workspace
 Responsible for real-world image inference using trained models. Compares **Azure AI Vision** vs **AWS Rekognition** for object detection.
+
+![Development Architecture](docs/images/04_development_pipeline.png)
 
 The solution follows a layered medallion architecture:
 
